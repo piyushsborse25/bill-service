@@ -1,5 +1,6 @@
 package com.mongo.bill_service.documents;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.data.annotation.Id;
@@ -31,7 +32,7 @@ public class BillDetails {
 	private String billDate;
 	private String time;
 	private String cashier;
-	private List<Item> items;
+	private List<Item> items = new ArrayList<Item>();
 	private int totalItems;
 	private int totalQuantity;
 	private double totalValue;

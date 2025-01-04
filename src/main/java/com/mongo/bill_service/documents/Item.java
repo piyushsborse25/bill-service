@@ -1,5 +1,6 @@
 package com.mongo.bill_service.documents;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.data.annotation.Id;
@@ -26,6 +27,6 @@ public class Item {
 	private int quantity;
 	private double rate;
 	private double value;
-	private List<String> participants;
+	private List<String> participants = new ArrayList<String>();
 
 }
