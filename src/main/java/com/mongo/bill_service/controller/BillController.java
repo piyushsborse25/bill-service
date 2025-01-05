@@ -25,6 +25,7 @@ import com.mongo.bill_service.documents.Item;
 import com.mongo.bill_service.entities.ItemResponse;
 import com.mongo.bill_service.entities.Split;
 import com.mongo.bill_service.entities.SplitResponse;
+import com.mongo.bill_service.exception.BillException;
 import com.mongo.bill_service.repos.BillRepository;
 import com.mongo.bill_service.repos.SequenceRepository;
 
@@ -130,7 +131,7 @@ public class BillController {
 		try {
 			result = billRepository.save(searchRequest);
 		} catch (Exception e) {
-			System.out.println(e.getMessage());
+			throw new BillException("ERRO1", "Invalid bill format: Missing or incorrect attributes. Please review and resubmit.");
 		}
 
 		return result;
