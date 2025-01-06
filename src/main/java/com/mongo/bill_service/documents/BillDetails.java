@@ -1,7 +1,9 @@
 package com.mongo.bill_service.documents;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
@@ -33,6 +35,8 @@ public class BillDetails {
 	private String time;
 	private String cashier;
 	private List<Item> items = new ArrayList<Item>();
+	private Set<String> participants = new HashSet<String>();
+	private String paidBy;
 	private int totalItems;
 	private int totalQuantity;
 	private double totalValue;

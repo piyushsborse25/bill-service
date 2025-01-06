@@ -1,7 +1,6 @@
 package com.mongo.bill_service.controller;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,6 @@ import com.mongo.bill_service.documents.BillDetails;
 import com.mongo.bill_service.documents.Item;
 import com.mongo.bill_service.entities.ItemResponse;
 import com.mongo.bill_service.entities.Split;
-import com.mongo.bill_service.entities.SplitResponse;
 import com.mongo.bill_service.exception.BillException;
 import com.mongo.bill_service.repos.BillRepository;
 import com.mongo.bill_service.repos.SequenceRepository;
@@ -101,8 +99,8 @@ public class BillController {
 		return result.getMappedResults();
 	}
 
-	@GetMapping(path = "/bill/{billId}/split", produces = MediaType.TEXT_HTML_VALUE)
-	public String split(@PathVariable("billId") Integer id) {
+	@GetMapping(path = "/bill/{billId}/split")
+	public List<Split> split(@PathVariable("billId") Integer id) {
 
 		BillDetails bill = billRepository.findById(id).get();
 
@@ -112,16 +110,12 @@ public class BillController {
 			for (String participant : item.getParticipants()) {
 				double newValue = (item.getValue() * 1.0) / totalP;
 
-				Split sp = new Split(participant, newValue, 1, new ArrayList<String>(Arrays.asList(item.getName())));
+				Split sp = new Split(participant, newValue, 1);
 				split.merge(participant, sp, BillController::mergeSplit);
 			}
 		}
-
-		double totalBill = split.values().stream().map(t -> t.getSplit()).mapToDouble(Double::valueOf).sum();
-
-		SplitResponse res = new SplitResponse(split.values(), totalBill);
-
-		return Consts.getSplitHTML(res);
+		
+		return new ArrayList<Split>(split.values());
 	}
 
 	@PostMapping(path = "/bill/save")
@@ -138,7 +132,6 @@ public class BillController {
 	}
 	
 	public static Split mergeSplit(Split old, Split latest) {
-		old.getItems().addAll(latest.getItems());
 		old.setSplit(old.getSplit() + latest.getSplit());
 		old.setItemcount(old.getItemcount() + latest.getItemcount());
 		return old;

@@ -92,7 +92,7 @@ public class Consts {
 
 				""";
 
-		return String.format(template, split.getName(), split.getSplit(), split.getItems().size(), getUl(split.getItems()));
+		return String.format(template, split.getName(), split.getSplit(), split.getItemcount());
 	}
 
 	public static String getUl(List<String> item) {
