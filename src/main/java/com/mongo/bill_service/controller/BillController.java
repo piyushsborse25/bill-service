@@ -2,13 +2,16 @@ package com.mongo.bill_service.controller;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -75,9 +78,14 @@ public class BillController {
 
 		BillDetails billDetails = billRepository.findById(billId).get();
 		String dateStr = billDetails.getBillDate();
+		
+		LocalDate dateTime = null;
 
-		LocalDateTime dateTime = LocalDateTime.parse(dateStr,
-				DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
+		try {
+			dateTime = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
+		} catch (Exception e) {
+			dateTime = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+		}
 		String formatted = dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 		billDetails.setBillDate(formatted);
 		return billDetails;
@@ -149,7 +157,10 @@ public class BillController {
 					.mapToDouble(Double::valueOf).sum();
 			int quant = searchRequest.getItems().stream().map(t -> String.valueOf(t.getQuantity()))
 					.mapToInt(Integer::valueOf).sum();
+			Set<String> participants = searchRequest.getItems().stream().map(t -> t.getParticipants())
+					.flatMap(t -> t.stream()).distinct().collect(Collectors.toSet());
 			int totalItems = searchRequest.getItems().size();
+			searchRequest.setParticipants(participants);
 			searchRequest.setTotalValue(sum);
 			searchRequest.setTotalQuantity(quant);
 			searchRequest.setTotalItems(totalItems);
