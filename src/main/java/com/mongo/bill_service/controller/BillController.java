@@ -75,8 +75,9 @@ public class BillController {
 
 		BillDetails billDetails = billRepository.findById(billId).get();
 		String dateStr = billDetails.getBillDate();
-		
-		LocalDateTime dateTime = LocalDateTime.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
+
+		LocalDateTime dateTime = LocalDateTime.parse(dateStr,
+				DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
 		String formatted = dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 		billDetails.setBillDate(formatted);
 		return billDetails;
@@ -175,6 +176,7 @@ public class BillController {
 			CellStyle headerStyle = workbook.createCellStyle();
 			Font headerFont = workbook.createFont();
 			headerFont.setBold(true);
+			headerFont.setColor(IndexedColors.WHITE.getIndex());
 			headerStyle.setFont(headerFont);
 			headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
 			headerStyle.setFillBackgroundColor(IndexedColors.WHITE.getIndex());
@@ -259,15 +261,126 @@ public class BillController {
 				sheet.autoSizeColumn(j);
 			}
 
+			// Add Items
+
+			for (String person : billDetails.getParticipants()) {
+				addSheet(workbook, person, items(billId, person));
+			}
+
 			workbook.write(out);
 
 			byte[] data = out.toByteArray();
 			ByteArrayResource resource = new ByteArrayResource(data);
 
-			return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=bill.xlsx")
+			DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+			String timestamp = LocalDateTime.now().format(formatter);
+			String fileName = "BILL_" + timestamp + ".xlsx";
+			return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fileName)
 					.contentType(MediaType.APPLICATION_OCTET_STREAM).contentLength(data.length).body(resource);
 		} catch (IOException e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	public static Sheet addSheet(Workbook workbook, String sheetName, List<Item> items) {
+		try {
+
+			// Create a sheet
+			Sheet sheet = workbook.createSheet(sheetName);
+
+			// Create header style
+			CellStyle headerStyle = workbook.createCellStyle();
+			Font headerFont = workbook.createFont();
+			headerFont.setBold(true);
+			headerFont.setColor(IndexedColors.WHITE.getIndex());
+			headerStyle.setFont(headerFont);
+			headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
+			headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+			headerStyle.setAlignment(HorizontalAlignment.CENTER);
+			headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+			// Create border style
+			CellStyle borderStyle = workbook.createCellStyle();
+			borderStyle.setBorderTop(BorderStyle.THIN);
+			borderStyle.setBorderBottom(BorderStyle.THIN);
+			borderStyle.setBorderLeft(BorderStyle.THIN);
+			borderStyle.setBorderRight(BorderStyle.THIN);
+			borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+			// Add header row
+			String[] headers = { "Item ID", "Name", "Quantity", "Rate", "Value", "Participants" };
+			Row headerRow = sheet.createRow(0);
+			for (int i = 0; i < headers.length; i++) {
+				Cell cell = headerRow.createCell(i);
+				cell.setCellValue(headers[i]);
+				cell.setCellStyle(headerStyle);
+			}
+
+			// Add item data
+			int rowNum = 1;
+			for (Item item : items) {
+				Row row = sheet.createRow(rowNum++);
+
+				int colNum = 0;
+
+				Cell cell1 = row.createCell(colNum++);
+				cell1.setCellValue(item.getItemId());
+				cell1.setCellStyle(borderStyle);
+
+				Cell cell2 = row.createCell(colNum++);
+				cell2.setCellValue(item.getName());
+				cell2.setCellStyle(borderStyle);
+
+				Cell cell3 = row.createCell(colNum++);
+				cell3.setCellValue(item.getQuantity());
+				cell3.setCellStyle(borderStyle);
+
+				Cell cell4 = row.createCell(colNum++);
+				cell4.setCellValue(item.getRate());
+				cell4.setCellStyle(borderStyle);
+
+				Cell cell5 = row.createCell(colNum++);
+				cell5.setCellValue(item.getValue());
+				cell5.setCellStyle(borderStyle);
+
+				Cell cell6 = row.createCell(colNum++);
+				cell6.setCellValue(String.join(", ", item.getParticipants()));
+				cell6.setCellStyle(borderStyle);
+			}
+
+			// Adjust column widths
+			for (int i = 0; i < headers.length; i++) {
+				sheet.autoSizeColumn(i);
+			}
+
+			return sheet;
+
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	@PostMapping(path = "/items/download", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<ByteArrayResource> downloadItemExcel(@RequestBody List<Item> items) {
+
+		try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+			addSheet(workbook, "ITEMS", items);
+			// Write workbook to output stream
+			workbook.write(out);
+
+			// Return the response with the Excel file
+			byte[] data = out.toByteArray();
+			ByteArrayResource resource = new ByteArrayResource(data);
+
+			DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+			String timestamp = LocalDateTime.now().format(formatter);
+			String fileName = "ITEMS_" + timestamp + ".xlsx";
+			return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fileName)
+					.contentType(MediaType.APPLICATION_OCTET_STREAM).contentLength(data.length).body(resource);
+
+		} catch (IOException e) {
+			return ResponseEntity.status(500).build();
 		}
 	}
 
