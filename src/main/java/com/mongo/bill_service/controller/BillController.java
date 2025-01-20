@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,19 +36,24 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.mongo.bill_service.consts.Consts;
 import com.mongo.bill_service.documents.BillDetails;
 import com.mongo.bill_service.documents.Item;
+import com.mongo.bill_service.documents.MyFile;
 import com.mongo.bill_service.entities.ItemResponse;
 import com.mongo.bill_service.entities.Split;
 import com.mongo.bill_service.exception.BillException;
 import com.mongo.bill_service.repos.BillRepository;
+import com.mongo.bill_service.repos.FileRepository;
 import com.mongo.bill_service.repos.SequenceRepository;
 
 @RestController
@@ -55,6 +61,9 @@ public class BillController {
 
 	@Autowired
 	BillRepository billRepository;
+
+	@Autowired
+	FileRepository fileRepository;
 
 	@Autowired
 	MongoTemplate mongoTemplate;
@@ -78,7 +87,7 @@ public class BillController {
 
 		BillDetails billDetails = billRepository.findById(billId).get();
 		String dateStr = billDetails.getBillDate();
-		
+
 		LocalDate dateTime = null;
 
 		try {
@@ -89,6 +98,18 @@ public class BillController {
 		String formatted = dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 		billDetails.setBillDate(formatted);
 		return billDetails;
+	}
+
+	@DeleteMapping(path = "/bill/{billId}")
+	public boolean deleteBillById(@PathVariable Integer billId) {
+		try {
+			billRepository.deleteById(billId);
+			return true;
+		} catch (Exception e) {
+			System.out.println("Invalid Bill Id");
+		}
+
+		return false;
 	}
 
 	@GetMapping(path = "/bill/{billId}/items")
@@ -171,6 +192,42 @@ public class BillController {
 		}
 
 		return result;
+	}
+
+	@PostMapping("/file/upload")
+	public void uploadFile(@RequestParam(value = "file") MultipartFile fileToUpload) {
+
+		try {
+			MyFile file = new MyFile();
+			file.setFileName(fileToUpload.getOriginalFilename());
+			file.setContentType(fileToUpload.getContentType());
+			file.setContentLength(fileToUpload.getBytes().length);
+			file.setData(fileToUpload.getBytes());
+
+			fileRepository.save(file);
+		} catch (Exception e) {
+			System.out.println(e);
+		}
+	}
+
+	@GetMapping("/file/{fileId}/download")
+	public ResponseEntity<ByteArrayResource> downloadFile(@PathVariable Integer fileId) {
+
+		MyFile downFile = null;
+
+		Optional<MyFile> file = fileRepository.findById(fileId);
+		downFile = file.isPresent() ? file.get() : null;
+
+		if (downFile != null) {
+			ByteArrayResource resource = new ByteArrayResource(downFile.getData());
+
+			return ResponseEntity.status(HttpStatus.OK)
+					.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + downFile.getFileName())
+					.contentType(MediaType.valueOf(downFile.getContentType()))
+					.contentLength(downFile.getContentLength()).body(resource);
+		}
+
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ByteArrayResource(null));
 	}
 
 	@GetMapping(path = "/bill/{billId}/download")
