@@ -331,7 +331,7 @@ public class BillController {
 
 			addSheetForSplits(workbook, "Splits", split(billId));
 			for (String person : billDetails.getParticipants()) {
-				addSheet(workbook, person, items(billId, person));
+				addSheet(workbook, person, items(billId, person), false);
 			}
 
 			workbook.write(out);
@@ -349,15 +349,11 @@ public class BillController {
 		}
 	}
 
-	public static Sheet addSheet(Workbook workbook, String sheetName, List<Item> items) {
+	public static Sheet addSheet(Workbook workbook, String sheetName, List<Item> items, boolean forItems) {
 		try {
 
 			// Create a sheet
 			Sheet sheet = workbook.createSheet(sheetName);
-
-			// Calculate the total value of all items
-			double total = items.stream().map(t -> t.getValue()).mapToDouble(Double::valueOf).sum();
-			total = DoubleRoundOffSerializer.roundDouble(total);
 
 			// Create header style
 			CellStyle headerStyle = workbook.createCellStyle();
@@ -389,6 +385,7 @@ public class BillController {
 
 			// Add item data starting from row 3
 			int rowNum = 4;
+			double totalHalf = 0;
 			double totalValue = 0;
 			for (Item item : items) {
 				Row row = sheet.createRow(rowNum++);
@@ -415,19 +412,24 @@ public class BillController {
 				cell5.setCellValue(item.getValue());
 				cell5.setCellStyle(borderStyle);
 
-				Cell cell6 = row.createCell(colNum++);
 				double currHalf = DoubleRoundOffSerializer
 						.roundDouble((item.getValue() / item.getParticipants().size()));
-				totalValue += currHalf;
-				cell6.setCellValue(currHalf);
-				cell6.setCellStyle(borderStyle);
+				totalValue += item.getValue();
+				totalHalf += currHalf;
+
+				if (!forItems) {
+					Cell cell6 = row.createCell(colNum++);
+					cell6.setCellValue(currHalf);
+					cell6.setCellStyle(borderStyle);
+				}
 
 				Cell cell7 = row.createCell(colNum++);
 				cell7.setCellValue(String.join(", ", item.getParticipants()));
 				cell7.setCellStyle(borderStyle);
 			}
 
-			totalValue = DoubleRoundOffSerializer.roundDouble(totalValue);
+			// Calculate the total value of all items
+			double finalTotal = DoubleRoundOffSerializer.roundDouble(forItems ? totalValue : totalHalf);
 
 			// Add row for Sheet Name
 			Row totalRow1 = sheet.createRow(0);
@@ -443,7 +445,7 @@ public class BillController {
 			totalLabelCell.setCellValue("Total Value: ");
 			totalLabelCell.setCellStyle(headerStyle);
 			Cell totalValueCell = totalRow.createCell(1);
-			totalValueCell.setCellValue("₹ " + totalValue);
+			totalValueCell.setCellValue("₹ " + finalTotal);
 
 			// Auto-size columns
 			for (int i = 0; i < headers.length; i++) {
@@ -533,7 +535,7 @@ public class BillController {
 
 		try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-			addSheet(workbook, "ITEMS", items);
+			addSheet(workbook, "ITEMS", items, true);
 
 			workbook.write(out);
 
