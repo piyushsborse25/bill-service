@@ -55,6 +55,7 @@ import com.mongo.bill_service.exception.BillException;
 import com.mongo.bill_service.repos.BillRepository;
 import com.mongo.bill_service.repos.FileRepository;
 import com.mongo.bill_service.repos.SequenceRepository;
+import com.mongo.bill_service.serializers.DoubleRoundOffSerializer;
 
 @RestController
 public class BillController {
@@ -130,7 +131,8 @@ public class BillController {
 				Aggregation.unwind("items"),
 				Aggregation.match(Criteria.where("items.participants")
 						.regex(Pattern.compile("^" + person + "$", Pattern.CASE_INSENSITIVE))),
-				Aggregation.project("items.name", "items.quantity", "items.rate", "items.value", "items.participants"));
+				Aggregation.project("items._id", "items.name", "items.quantity", "items.rate", "items.value",
+						"items.participants"));
 
 		AggregationResults<Item> result = mongoTemplate.aggregate(aggregation, "billRepo", Item.class);
 
@@ -160,6 +162,7 @@ public class BillController {
 			int totalP = item.getParticipants().size();
 			for (String participant : item.getParticipants()) {
 				double newValue = (item.getValue() * 1.0) / totalP;
+				newValue = DoubleRoundOffSerializer.roundDouble(newValue);
 
 				Split sp = new Split(participant, newValue, 1);
 				split.merge(participant, sp, BillController::mergeSplit);
@@ -237,10 +240,8 @@ public class BillController {
 
 		try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-			// Create a sheet
 			Sheet sheet = workbook.createSheet("Bill Details");
 
-			// Create styles
 			CellStyle headerStyle = workbook.createCellStyle();
 			Font headerFont = workbook.createFont();
 			headerFont.setBold(true);
@@ -264,7 +265,6 @@ public class BillController {
 			boldFont.setBold(true);
 			boldStyle.setFont(boldFont);
 
-			// Add bill summary section
 			int rowNum = 0;
 			Row row = sheet.createRow(rowNum++);
 			row.createCell(0).setCellValue("Bill Summary");
@@ -283,16 +283,13 @@ public class BillController {
 			sheet.createRow(rowNum++).createCell(0).setCellValue("Total Quantity: " + billDetails.getTotalQuantity());
 			sheet.createRow(rowNum++).createCell(0).setCellValue("Total Value: " + billDetails.getTotalValue());
 
-			// Add participants
 			sheet.createRow(rowNum++).createCell(0)
 					.setCellValue("Participants: " + String.join(", ", billDetails.getParticipants()));
 
-			// Add a gap
 			rowNum++;
 
-			// Add item details section
 			row = sheet.createRow(rowNum++);
-			String[] headers = { "Name", "Quantity", "Rate", "Value", "Participants" };
+			String[] headers = { "Item ID", "Name", "Quantity", "Rate", "Value", "Participants" };
 			for (int i = 0; i < headers.length; i++) {
 				Cell cell = row.createCell(i);
 				cell.setCellValue(headers[i]);
@@ -302,6 +299,10 @@ public class BillController {
 			for (Item item : billDetails.getItems()) {
 				int i = 0;
 				row = sheet.createRow(rowNum++);
+
+				Cell cell0 = row.createCell(i++);
+				cell0.setCellValue(item.getItemId());
+				cell0.setCellStyle(borderStyle);
 
 				Cell cell1 = row.createCell(i++);
 				cell1.setCellValue(item.getName());
@@ -324,13 +325,11 @@ public class BillController {
 				cell5.setCellStyle(borderStyle);
 			}
 
-			// Adjust column width
 			for (int j = 0; j < headers.length; j++) {
 				sheet.autoSizeColumn(j);
 			}
 
-			// Add Items
-
+			addSheetForSplits(workbook, "Splits", split(billId));
 			for (String person : billDetails.getParticipants()) {
 				addSheet(workbook, person, items(billId, person));
 			}
@@ -356,6 +355,10 @@ public class BillController {
 			// Create a sheet
 			Sheet sheet = workbook.createSheet(sheetName);
 
+			// Calculate the total value of all items
+			double total = items.stream().map(t -> t.getValue()).mapToDouble(Double::valueOf).sum();
+			total = DoubleRoundOffSerializer.roundDouble(total);
+
 			// Create header style
 			CellStyle headerStyle = workbook.createCellStyle();
 			Font headerFont = workbook.createFont();
@@ -375,17 +378,18 @@ public class BillController {
 			borderStyle.setBorderRight(BorderStyle.THIN);
 			borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-			// Add header row
-			String[] headers = { "Item ID", "Name", "Quantity", "Rate", "Value", "Participants" };
-			Row headerRow = sheet.createRow(0);
+			// Add header row for main table
+			String[] headers = { "Item ID", "Name", "Quantity", "Rate", "Value", "Your Half", "Participants" };
+			Row headerRow = sheet.createRow(3);
 			for (int i = 0; i < headers.length; i++) {
 				Cell cell = headerRow.createCell(i);
 				cell.setCellValue(headers[i]);
 				cell.setCellStyle(headerStyle);
 			}
 
-			// Add item data
-			int rowNum = 1;
+			// Add item data starting from row 3
+			int rowNum = 4;
+			double totalValue = 0;
 			for (Item item : items) {
 				Row row = sheet.createRow(rowNum++);
 
@@ -412,11 +416,107 @@ public class BillController {
 				cell5.setCellStyle(borderStyle);
 
 				Cell cell6 = row.createCell(colNum++);
-				cell6.setCellValue(String.join(", ", item.getParticipants()));
+				double currHalf = DoubleRoundOffSerializer
+						.roundDouble((item.getValue() / item.getParticipants().size()));
+				totalValue += currHalf;
+				cell6.setCellValue(currHalf);
 				cell6.setCellStyle(borderStyle);
+
+				Cell cell7 = row.createCell(colNum++);
+				cell7.setCellValue(String.join(", ", item.getParticipants()));
+				cell7.setCellStyle(borderStyle);
 			}
 
-			// Adjust column widths
+			totalValue = DoubleRoundOffSerializer.roundDouble(totalValue);
+
+			// Add row for Sheet Name
+			Row totalRow1 = sheet.createRow(0);
+			Cell totalLabelCell1 = totalRow1.createCell(0);
+			totalLabelCell1.setCellValue("Name: ");
+			totalLabelCell1.setCellStyle(headerStyle);
+			Cell totalValueCell1 = totalRow1.createCell(1);
+			totalValueCell1.setCellValue(sheetName);
+
+			// Add row for Total Value
+			Row totalRow = sheet.createRow(1);
+			Cell totalLabelCell = totalRow.createCell(0);
+			totalLabelCell.setCellValue("Total Value: ");
+			totalLabelCell.setCellStyle(headerStyle);
+			Cell totalValueCell = totalRow.createCell(1);
+			totalValueCell.setCellValue("₹ " + totalValue);
+
+			// Auto-size columns
+			for (int i = 0; i < headers.length; i++) {
+				sheet.autoSizeColumn(i);
+			}
+
+			return sheet;
+
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	public static Sheet addSheetForSplits(Workbook workbook, String sheetName, List<Split> splits) {
+		try {
+
+			Sheet sheet = workbook.createSheet(sheetName);
+
+			CellStyle headerStyle = workbook.createCellStyle();
+			Font headerFont = workbook.createFont();
+			headerFont.setBold(true);
+			headerFont.setColor(IndexedColors.WHITE.getIndex());
+			headerStyle.setFont(headerFont);
+			headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
+			headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+			headerStyle.setAlignment(HorizontalAlignment.CENTER);
+			headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+			CellStyle borderStyle = workbook.createCellStyle();
+			borderStyle.setBorderTop(BorderStyle.THIN);
+			borderStyle.setBorderBottom(BorderStyle.THIN);
+			borderStyle.setBorderLeft(BorderStyle.THIN);
+			borderStyle.setBorderRight(BorderStyle.THIN);
+			borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+			double totalAmount = splits.stream().map(t -> t.getSplit()).mapToDouble(Double::valueOf).sum();
+			totalAmount = DoubleRoundOffSerializer.roundDouble(totalAmount);
+
+			// Add row for Sheet Name
+			Row totalRow1 = sheet.createRow(0);
+			Cell totalLabelCell1 = totalRow1.createCell(0);
+			totalLabelCell1.setCellValue("Total: ");
+			totalLabelCell1.setCellStyle(headerStyle);
+			Cell totalValueCell1 = totalRow1.createCell(1);
+			totalValueCell1.setCellValue("₹ " + totalAmount);
+
+			String[] headers = { "Name", "Split Amount", "Item Count" };
+			Row headerRow = sheet.createRow(2);
+			for (int i = 0; i < headers.length; i++) {
+				Cell cell = headerRow.createCell(i);
+				cell.setCellValue(headers[i]);
+				cell.setCellStyle(headerStyle);
+			}
+
+			int rowNum = 3;
+			for (Split split : splits) {
+				Row row = sheet.createRow(rowNum++);
+
+				int colNum = 0;
+
+				Cell cell1 = row.createCell(colNum++);
+				cell1.setCellValue(split.getName());
+				cell1.setCellStyle(borderStyle);
+
+				Cell cell2 = row.createCell(colNum++);
+				cell2.setCellValue(split.getSplit());
+				cell2.setCellStyle(borderStyle);
+
+				Cell cell3 = row.createCell(colNum++);
+				cell3.setCellValue(split.getItemcount());
+				cell3.setCellStyle(borderStyle);
+			}
+
 			for (int i = 0; i < headers.length; i++) {
 				sheet.autoSizeColumn(i);
 			}
@@ -434,10 +534,9 @@ public class BillController {
 		try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
 			addSheet(workbook, "ITEMS", items);
-			// Write workbook to output stream
+
 			workbook.write(out);
 
-			// Return the response with the Excel file
 			byte[] data = out.toByteArray();
 			ByteArrayResource resource = new ByteArrayResource(data);
 

@@ -9,8 +9,13 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.mongo.bill_service.serializers.DoubleRoundOffSerializer;
+
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
@@ -39,5 +44,13 @@ public class BillDetails {
 	private String paidBy;
 	private int totalItems;
 	private int totalQuantity;
+
+	@JsonSerialize(using = DoubleRoundOffSerializer.class)
+	@Getter(value = AccessLevel.NONE)
 	private double totalValue;
+
+	public double getTotalValue() {
+		return DoubleRoundOffSerializer.roundDouble(totalValue);
+	}
+
 }
