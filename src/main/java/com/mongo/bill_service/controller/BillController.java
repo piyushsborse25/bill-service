@@ -375,7 +375,11 @@ public class BillController {
 			borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
 			// Add header row for main table
-			String[] headers = { "Item ID", "Name", "Quantity", "Rate", "Value", "Your Half", "Participants" };
+			String[] itemHeaders = { "Item ID", "Name", "Quantity", "Rate", "Value", "Participants" };
+			String[] splitHeaders = { "Item ID", "Name", "Quantity", "Rate", "Value", "Your Half", "Participants" };
+
+			String[] headers = forItems ? itemHeaders : splitHeaders;
+
 			Row headerRow = sheet.createRow(3);
 			for (int i = 0; i < headers.length; i++) {
 				Cell cell = headerRow.createCell(i);
