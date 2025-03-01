@@ -40,6 +40,7 @@ public class BillDetails {
 	private String time;
 	private String cashier;
 	private List<Item> items = new ArrayList<Item>();
+	private List<PriceBreakdown> extraPrices = new ArrayList<PriceBreakdown>();
 	private Set<String> participants = new HashSet<String>();
 	private String paidBy;
 	private int totalItems;

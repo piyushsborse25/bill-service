@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -49,6 +50,7 @@ import com.mongo.bill_service.consts.Consts;
 import com.mongo.bill_service.documents.BillDetails;
 import com.mongo.bill_service.documents.Item;
 import com.mongo.bill_service.documents.MyFile;
+import com.mongo.bill_service.documents.PriceBreakdown;
 import com.mongo.bill_service.entities.ItemResponse;
 import com.mongo.bill_service.entities.Split;
 import com.mongo.bill_service.exception.BillException;
@@ -157,6 +159,7 @@ public class BillController {
 
 		BillDetails bill = billRepository.findById(id).get();
 
+		// Calculate Original Split
 		Map<String, Split> split = new HashMap<String, Split>();
 		for (Item item : bill.getItems()) {
 			int totalP = item.getParticipants().size();
@@ -169,6 +172,50 @@ public class BillController {
 			}
 		}
 
+		if (!bill.getExtraPrices().isEmpty()) {
+
+			// Calculate Participant percentage split distribution
+			double totalSum = split.values().stream().map(t -> t.getSplit()).mapToDouble(Double::valueOf).sum();
+			Map<String, Double> perDistOfSplit = new HashMap<String, Double>();
+
+			for (Entry<String, Split> entry : split.entrySet()) {
+				perDistOfSplit.put(entry.getKey(), (entry.getValue().getSplit() / totalSum) * 100D);
+			}
+
+			// Calculate Revised Split
+			System.out.println(perDistOfSplit);
+			for (Entry<String, Double> currDist : perDistOfSplit.entrySet()) {
+
+				double currPartiSplit = split.get(currDist.getKey()).getSplit();
+				// Process sum with the extra charges
+
+				for (PriceBreakdown currCharge : bill.getExtraPrices()) {
+					PriceBreakdown.Types chargeType = currCharge.getType();
+
+					double updatedByDist = (currCharge.getValue() * (currDist.getValue() / 100D));
+
+					switch (chargeType) {
+					case DISCOUNT:
+						currPartiSplit -= updatedByDist;
+						break;
+					case TAX:
+						currPartiSplit += updatedByDist;
+						break;
+					case EXTRA_CHARGES:
+						currPartiSplit += updatedByDist;
+						break;
+					case CASHBACK:
+						currPartiSplit -= updatedByDist;
+						break;
+					default:
+						System.out.println("Invalid charge type");
+						break;
+					}
+				}
+				split.get(currDist.getKey()).setSplit(DoubleRoundOffSerializer.roundDouble(currPartiSplit));
+			}
+		}
+
 		return new ArrayList<Split>(split.values());
 	}
 
@@ -177,12 +224,43 @@ public class BillController {
 
 		BillDetails result = null;
 		try {
+
+			// Process sum
 			double sum = searchRequest.getItems().stream().map(t -> String.valueOf(t.getValue()))
 					.mapToDouble(Double::valueOf).sum();
+
+			// Process total quantity
 			int quant = searchRequest.getItems().stream().map(t -> String.valueOf(t.getQuantity()))
 					.mapToInt(Integer::valueOf).sum();
+
+			// Process participants
 			Set<String> participants = searchRequest.getItems().stream().map(t -> t.getParticipants())
 					.flatMap(t -> t.stream()).distinct().collect(Collectors.toSet());
+
+			// Process sum with the extra charges
+			for (PriceBreakdown currCharge : searchRequest.getExtraPrices()) {
+				PriceBreakdown.Types chargeType = currCharge.getType();
+
+				switch (chargeType) {
+				case DISCOUNT:
+					sum -= currCharge.getValue();
+					break;
+				case TAX:
+					sum += currCharge.getValue();
+					break;
+				case EXTRA_CHARGES:
+					sum += currCharge.getValue();
+					break;
+				case CASHBACK:
+					sum -= currCharge.getValue();
+					break;
+				default:
+					System.out.println("Invalid charge type");
+					break;
+				}
+
+			}
+
 			int totalItems = searchRequest.getItems().size();
 			searchRequest.setParticipants(participants);
 			searchRequest.setTotalValue(sum);
@@ -191,7 +269,7 @@ public class BillController {
 			result = billRepository.save(searchRequest);
 		} catch (Exception e) {
 			throw new BillException("ERRO1",
-					"Invalid bill format: Missing or incorrect attributes. Please review and resubmit.");
+					"Invalid bill format: Missing or incorrect attributes. Please review and resubmit." + e);
 		}
 
 		return result;
