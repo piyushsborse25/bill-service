@@ -81,8 +81,10 @@ public class BillController {
 
 	@GetMapping(path = "/bills")
 	public List<BillDetails> find() {
-
-		return billRepository.findAll();
+		return billRepository.findAll().stream().sorted((o1, o2) -> {
+			return LocalDate.parse(o2.getBillDate(), Consts.DATE_FORMATTER)
+					.compareTo(LocalDate.parse(o1.getBillDate(), Consts.DATE_FORMATTER));
+		}).toList();
 	}
 
 	@GetMapping(path = "/bill/{billId}")
@@ -90,15 +92,8 @@ public class BillController {
 
 		BillDetails billDetails = billRepository.findById(billId).get();
 		String dateStr = billDetails.getBillDate();
-
-		LocalDate dateTime = null;
-
-		try {
-			dateTime = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
-		} catch (Exception e) {
-			dateTime = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-		}
-		String formatted = dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+		LocalDate dateTime = LocalDate.parse(dateStr, Consts.DATE_FORMATTER);
+		String formatted = dateTime.format(Consts.DATE_FORMATTER);
 		billDetails.setBillDate(formatted);
 		return billDetails;
 	}
@@ -266,10 +261,14 @@ public class BillController {
 			searchRequest.setTotalValue(sum);
 			searchRequest.setTotalQuantity(quant);
 			searchRequest.setTotalItems(totalItems);
+
+			String billReq = searchRequest.getBillDate();
+			LocalDate dateReq = LocalDate.parse(billReq, Consts.DATE_FORMATTER);
+			searchRequest.setBillDate(dateReq.format(Consts.DATE_FORMATTER));
 			result = billRepository.save(searchRequest);
 		} catch (Exception e) {
 			throw new BillException("ERRO1",
-					"Invalid bill format: Missing or incorrect attributes. Please review and resubmit." + e);
+					"Invalid bill format: Missing or incorrect attributes. Please review and resubmit.");
 		}
 
 		return result;

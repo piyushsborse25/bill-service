@@ -1,5 +1,6 @@
 package com.mongo.bill_service.consts;
 
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -7,6 +8,10 @@ import com.mongo.bill_service.entities.Split;
 import com.mongo.bill_service.entities.SplitResponse;
 
 public class Consts {
+	
+	public static final String DATE_FORMAT = "dd/MM/yyyy";
+	
+	public static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern(DATE_FORMAT);
 
 	public static final String welcomeHTML = """
 			<!DOCTYPE html>
