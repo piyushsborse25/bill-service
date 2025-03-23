@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,8 +83,12 @@ public class BillController {
 	@GetMapping(path = "/bills")
 	public List<BillDetails> find() {
 		return billRepository.findAll().stream().sorted((o1, o2) -> {
-			return LocalDate.parse(o2.getBillDate(), Consts.DATE_FORMATTER)
+			int res = LocalDate.parse(o2.getBillDate(), Consts.DATE_FORMATTER)
 					.compareTo(LocalDate.parse(o1.getBillDate(), Consts.DATE_FORMATTER));
+			
+			res = res == 0 ? LocalTime.parse(o2.getTime(), Consts.TIME_FORMATTER)
+					.compareTo(LocalTime.parse(o1.getTime(), Consts.TIME_FORMATTER)) : res;
+			return res;
 		}).toList();
 	}
 
@@ -178,7 +183,7 @@ public class BillController {
 			}
 
 			// Calculate Revised Split
-			System.out.println(perDistOfSplit);
+			// System.out.println(perDistOfSplit);
 			for (Entry<String, Double> currDist : perDistOfSplit.entrySet()) {
 
 				double currPartiSplit = split.get(currDist.getKey()).getSplit();
@@ -262,10 +267,16 @@ public class BillController {
 			searchRequest.setTotalQuantity(quant);
 			searchRequest.setTotalItems(totalItems);
 
-			String billReq = searchRequest.getBillDate();
-			LocalDate dateReq = LocalDate.parse(billReq, Consts.DATE_FORMATTER);
+			String billDateReq = searchRequest.getBillDate();
+			LocalDate dateReq = LocalDate.parse(billDateReq, Consts.DATE_FORMATTER);
 			searchRequest.setBillDate(dateReq.format(Consts.DATE_FORMATTER));
+
+			String billTimeReq = searchRequest.getTime();
+			LocalTime timeReq = LocalTime.parse(billTimeReq, Consts.TIME_FORMATTER);
+			searchRequest.setTime(timeReq.format(Consts.TIME_FORMATTER));
+
 			result = billRepository.save(searchRequest);
+			
 		} catch (Exception e) {
 			throw new BillException("ERRO1",
 					"Invalid bill format: Missing or incorrect attributes. Please review and resubmit.");
